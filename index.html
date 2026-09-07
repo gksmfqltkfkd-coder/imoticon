@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>실시간 이모티콘 보내기</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <style>
+    :root { --ink:#3d3547; --paper:#fffaf1; --card:#fff; --line:#eee3d4; --pink:#ff6f91; --yellow:#ffca57; --blue:#75c8ff; --mint:#69d7bf; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-width:0; color:var(--ink); font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif; font-size:16px; line-height:1.5; background:radial-gradient(circle at 10% 5%,#ffe4b8 0,transparent 26rem),radial-gradient(circle at 90% 0,#ffdce8 0,transparent 28rem),var(--paper); }
+    button,input { font:inherit; }
+    button { min-height:48px; border:0; border-radius:16px; padding:12px 18px; cursor:pointer; font-weight:800; color:var(--ink); transition:transform .15s ease, box-shadow .15s ease, filter .15s ease; }
+    button:hover { filter:brightness(1.03); box-shadow:0 7px 15px #4b3b5020; }
+    button:active,.sent { transform:scale(1.06); }
+    button:focus-visible,input:focus-visible { outline:3px solid #5946b2; outline-offset:3px; }
+    .page { width:min(100%,960px); margin:0 auto; padding:24px 16px 42px; }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:22px; }
+    .brand { margin:0; font-size:clamp(1.15rem,3vw,1.5rem); }
+    .home { background:#fff; border:2px solid var(--line); white-space:nowrap; }
+    .screen { display:none; } .screen.active { display:block; }
+    .hero,.panel { background:rgba(255,255,255,.92); border:1px solid #fff; border-radius:28px; box-shadow:0 15px 40px #6b526018; padding:clamp(22px,5vw,48px); }
+    .hero { text-align:center; }
+    h1 { margin:0 0 12px; font-size:clamp(1.8rem,6vw,3.25rem); line-height:1.18; }
+    h2 { margin:0; font-size:clamp(1.35rem,4vw,2rem); }
+    .lead { margin:0 auto; max-width:38rem; font-size:1.05rem; }
+    .mode-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; max-width:680px; margin:30px auto 0; }
+    .mode { min-height:160px; font-size:clamp(1.2rem,3vw,1.55rem); display:flex; flex-direction:column; justify-content:center; gap:8px; }
+    .mode span { font-size:2.8rem; } .teacher { background:linear-gradient(135deg,#b9eaff,var(--blue)); } .student { background:linear-gradient(135deg,#ffe48f,var(--yellow)); }
+    .password-box { display:none; max-width:440px; margin:26px auto 0; text-align:left; background:#fff7df; padding:20px; border-radius:20px; }
+    .password-box.show { display:block; } label { display:block; font-weight:800; margin-bottom:8px; } input { width:100%; min-height:48px; border:2px solid #dfcfb8; border-radius:14px; padding:10px 13px; background:#fff; } .login { width:100%; margin-top:12px; background:var(--mint); }
+    .message { min-height:1.5em; margin:9px 0 0; font-weight:700; } .error { color:#bd2451; } .info { color:#295f76; }
+    .status { margin:0 0 18px; padding:10px 13px; border-radius:14px; background:#fff5ca; font-weight:700; } .status.connected { background:#dff7ed; color:#176348; } .status.problem { background:#ffe1e8; color:#9d2445; }
+    .reaction-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:28px 0; }
+    .reaction { min-height:132px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; font-size:clamp(1rem,2.5vw,1.25rem); }
+    .reaction b { font-size:3rem; line-height:1; } .like { background:#bce9ff; } .heart { background:#ffc7d6; } .clap { background:#ffe69a; }
+    .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:18px; } .stat { padding:16px 10px; border-radius:18px; background:#fff8ee; text-align:center; border:1px solid var(--line); } .stat strong { display:block; font-size:clamp(1.4rem,4vw,2.25rem); }
+    .total { margin:24px 0 0; padding:20px; border-radius:20px; text-align:center; background:linear-gradient(135deg,#e4f9f3,#eef7ff); font-size:clamp(1.25rem,4vw,1.85rem); font-weight:900; }
+    .feed-title { margin:30px 0 12px; } .feed { display:flex; flex-wrap:wrap; align-content:flex-start; gap:10px; min-height:120px; padding:17px; border-radius:20px; background:#fff8ee; border:1px dashed #d9c8b0; overflow:hidden; }
+    .bubble { width:54px; height:54px; border-radius:50%; display:grid; place-items:center; background:#fff; font-size:2rem; box-shadow:0 4px 10px #593a3018; animation:pop .4s ease both; } @keyframes pop { from { opacity:0; transform:translateY(14px) scale(.45); } to { opacity:1; transform:translateY(0) scale(1); } }
+    .note { margin:22px 0 0; color:#665a62; font-size:.94rem; }
+    @media (max-width:560px) { .page { padding:15px 12px 30px; } .top { margin-bottom:14px; } .hero,.panel { border-radius:22px; padding:22px 16px; } .mode-grid { grid-template-columns:1fr; } .mode { min-height:116px; flex-direction:row; align-items:center; } .reaction-grid { grid-template-columns:1fr; } .reaction { min-height:78px; flex-direction:row; } .reaction b { font-size:2.2rem; } .stats { gap:7px; } .stat { padding:12px 5px; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="top"><p class="brand">✨ 실시간 이모티콘 교실</p><button class="home" id="homeButton" hidden>처음으로</button></div>
+    <section id="startScreen" class="screen active"><div class="hero"><h1>반응으로 함께하는 수업</h1><p class="lead">나의 마음을 이모티콘으로 바로 보내 보세요.</p><div class="mode-grid"><button class="mode teacher" id="teacherMode"><span>🧑‍🏫</span>강사 모드</button><button class="mode student" id="studentMode"><span>🧑‍🎓</span>학생 모드</button></div><div class="password-box" id="passwordBox"><label for="password">강사 비밀번호</label><input id="password" type="password" inputmode="numeric" autocomplete="off" aria-describedby="passwordMessage"><button class="login" id="loginButton">강사 화면으로 들어가기</button><p id="passwordMessage" class="message error" aria-live="polite"></p></div><p class="note">안내: 비밀번호 1004는 실습용 화면 진입 제한이며, 실제 데이터 보안을 보장하지 않습니다.</p></div></section>
+    <section id="studentScreen" class="screen"><div class="panel"><h1>지금 내 반응을 보내요!</h1><p class="lead">마음에 드는 버튼을 눌러 주세요. 여러 번 보내도 괜찮아요.</p><p id="studentStatus" class="status" aria-live="polite">Firebase에 연결하는 중이에요…</p><div class="reaction-grid"><button class="reaction like" data-reaction="like"><b>👍</b>좋아요</button><button class="reaction heart" data-reaction="heart"><b>❤️</b>공감해요</button><button class="reaction clap" data-reaction="clap"><b>👏</b>응원해요</button></div><h2>우리 반의 실시간 반응</h2><div class="stats"><div class="stat">👍 좋아요<strong id="likeCount">0</strong></div><div class="stat">❤️ 공감해요<strong id="heartCount">0</strong></div><div class="stat">👏 응원해요<strong id="clapCount">0</strong></div></div><p class="total">지금까지 반응 <span id="studentTotal">0</span>회</p></div></section>
+    <section id="teacherScreen" class="screen"><div class="panel"><h1>우리 반 실시간 반응</h1><p id="teacherStatus" class="status" aria-live="polite">Firebase에 연결하는 중이에요…</p><div class="stats"><div class="stat">👍 좋아요<strong id="teacherLike">0</strong></div><div class="stat">❤️ 공감해요<strong id="teacherHeart">0</strong></div><div class="stat">👏 응원해요<strong id="teacherClap">0</strong></div></div><p class="total">지금까지 반응 <span id="teacherTotal">0</span>회</p><h2 class="feed-title">방금 도착한 반응</h2><div class="feed" id="reactionFeed" aria-live="polite"><span class="info">아직 도착한 반응이 없어요.</span></div></div></section>
+  </main>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCjXIp97vETcinezdVA_Xc82kddAVQ92Bk",
+      authDomain: "test-f142c.firebaseapp.com",
+      databaseURL: "https://test-f142c-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "test-f142c",
+      storageBucket: "test-f142c.firebasestorage.app",
+      messagingSenderId: "979735149680",
+      appId: "1:979735149680:web:58ab16c143bc1abebc08b5"
+    };
+    const reactionMeta = { like:{emoji:'👍'}, heart:{emoji:'❤️'}, clap:{emoji:'👏'} };
+    const database = firebase.initializeApp(firebaseConfig).database();
+    const reactionsRef = database.ref('practice/reactions');
+    const screens = document.querySelectorAll('.screen');
+    const homeButton = document.getElementById('homeButton');
+    let activeScreen = 'startScreen'; let feedInitialized = false;
+    function showScreen(id) { screens.forEach(s => s.classList.toggle('active',s.id === id)); activeScreen=id; homeButton.hidden=id==='startScreen'; if(id==='startScreen'){ document.getElementById('password').value=''; document.getElementById('passwordBox').classList.remove('show'); document.getElementById('passwordMessage').textContent=''; } }
+    document.getElementById('teacherMode').onclick=()=>{ document.getElementById('passwordBox').classList.add('show'); document.getElementById('password').focus(); };
+    document.getElementById('studentMode').onclick=()=>showScreen('studentScreen');
+    homeButton.onclick=()=>showScreen('startScreen');
+    function enterTeacher() { const msg=document.getElementById('passwordMessage'); if(document.getElementById('password').value==='1004'){ msg.textContent=''; showScreen('teacherScreen'); } else { msg.textContent='비밀번호가 맞지 않아요. 다시 입력해 주세요.'; document.getElementById('password').focus(); } }
+    document.getElementById('loginButton').onclick=enterTeacher;
+    document.getElementById('password').addEventListener('keydown',e=>{if(e.key==='Enter') enterTeacher();});
+    function setStatus(text,type) { ['studentStatus','teacherStatus'].forEach(id=>{const el=document.getElementById(id);el.textContent=text;el.className='status '+(type||'');}); }
+    database.ref('.info/connected').on('value', snap=>setStatus(snap.val() ? 'Firebase에 연결되었어요. 반응이 실시간으로 반영됩니다.' : 'Firebase 연결이 끊어졌어요. 인터넷 연결을 확인해 주세요.',snap.val()?'connected':'problem'));
+    function updateCounts(items) { const counts={like:0,heart:0,clap:0}; Object.values(items||{}).forEach(item=>{if(item && counts[item.type] !== undefined) counts[item.type]++;}); const total=counts.like+counts.heart+counts.clap; document.getElementById('likeCount').textContent=counts.like; document.getElementById('heartCount').textContent=counts.heart; document.getElementById('clapCount').textContent=counts.clap; document.getElementById('studentTotal').textContent=total; document.getElementById('teacherLike').textContent=counts.like; document.getElementById('teacherHeart').textContent=counts.heart; document.getElementById('teacherClap').textContent=counts.clap; document.getElementById('teacherTotal').textContent=total; }
+    reactionsRef.on('value',snap=>updateCounts(snap.val()),()=>setStatus('반응을 불러오지 못했어요. Firebase 설정과 보안 규칙을 확인해 주세요.','problem'));
+    reactionsRef.limitToLast(30).on('child_added',snap=>{ const item=snap.val(); if(!item || !reactionMeta[item.type]) return; const feed=document.getElementById('reactionFeed'); if(!feedInitialized){feed.textContent=''; feedInitialized=true;} const bubble=document.createElement('span'); bubble.className='bubble'; bubble.textContent=reactionMeta[item.type].emoji; bubble.title='새 반응'; feed.appendChild(bubble); while(feed.children.length>30) feed.removeChild(feed.firstChild); },()=>setStatus('새 반응을 받지 못했어요. Firebase 연결을 확인해 주세요.','problem'));
+    document.querySelectorAll('[data-reaction]').forEach(button=>button.addEventListener('click',async()=>{ const type=button.dataset.reaction; button.classList.remove('sent'); void button.offsetWidth; button.classList.add('sent'); button.disabled=true; try { await reactionsRef.push({type, createdAt: firebase.database.ServerValue.TIMESTAMP}); setStatus('반응을 성공적으로 보냈어요!','connected'); } catch(error) { setStatus('반응 전송에 실패했어요. 인터넷 연결과 Firebase 보안 규칙을 확인해 주세요.','problem'); } finally { button.disabled=false; } }));
+  </script>
+</body>
+</html>
